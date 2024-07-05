@@ -4,6 +4,8 @@ const express = require("express")
 const bodyParser = require("body-parser")
 const fs = require("fs")
 const jwt = require('jsonwebtoken')
+const cookieParser = require("cookie-parser")
+
 
 const app = express()
 
@@ -13,20 +15,21 @@ app.set("view engine", "ejs")
 app.set(path.join(__dirname,"views"))
 app.use(express.static(path.join(__dirname,"public")))
 app.use(bodyParser.urlencoded({extended:true}))
+app.use(cookieParser())
 
 app.use(express.json())
-
 const auth = (req, res, next) => {
-    const authHeader = req.headers['authorization']
-    if (authHeader) {
-      const token = authHeader.split(' ')[1]
+    const token = req.cookies.token
+    if (token) {
       jwt.verify(token, SECRET_KEY, (err, user) => {
         if (err) {
-          return res.status(403).send('Invalid token').redirect("/login")
+          return res.status(403).redirect("/login")
         }
         req.user = user
+        next()
       })
-      return next()
+    } else {
+      res.redirect("/login")
     }
   }
 
@@ -62,20 +65,22 @@ app.post("/login", (req,res) => {
     const users = JSON.parse(fs.readFileSync("users.json"))
     const user = users.find(user => user.username === username && user.password === password)
     if(!user){
-         res.redirect("/register")
+         return res.redirect("/register")
     }
     const token = jwt.sign(user, SECRET_KEY, { expiresIn: 60 })
-    res.status(200).send(token).redirect("/user")
+    res.cookie('token', token, { httpOnly: true })
+    res.render("user",{username})
    
 
 })
 app.get("/login", (req,res) => {
-    res.render("user")
+    res.render("user" )
 })
 
 
+
 app.get("/user" ,auth ,(req,res) => {
-    res.status(200).json({ message: "Hello ", user: req.user })
+    res.status(200).redirect("/user")
 })
 
 app.listen(PORT, () => {
